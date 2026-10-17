@@ -1,0 +1,94 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: immo3d_postgres
+    environment:
+      POSTGRES_USER: immo3d_user
+      POSTGRES_PASSWORD: immo3d_password
+      POSTGRES_DB: immo3d_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U immo3d_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - immo3d_network
+
+  postgres-pgvector:
+    image: pgvector/pgvector:pg16
+    container_name: immo3d_postgres_vector
+    environment:
+      POSTGRES_USER: immo3d_user
+      POSTGRES_PASSWORD: immo3d_password
+      POSTGRES_DB: immo3d_vectors_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_vectors_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U immo3d_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - immo3d_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: immo3d_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --appendfilename "appendonly.aof"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - immo3d_network
+
+  # Optional: Redis Commander für Debugging
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: immo3d_redis_commander
+    environment:
+      - REDIS_HOSTS=local:immo3d_redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - immo3d_network
+
+  # Optional: pgAdmin für PostgreSQL Debugging
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: immo3d_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@immo3d.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+      - postgres-pgvector
+    networks:
+      - immo3d_network
+
+volumes:
+  postgres_data:
+  postgres_vectors_data:
+  redis_data:
+
+networks:
+  immo3d_network:
+    driver: bridge
